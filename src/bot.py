@@ -238,7 +238,8 @@ def run_discord_bot():
     async def thread(interaction: discord.Interaction):
         if isinstance(interaction.channel, discord.TextChannel):
             channel: discord.TextChannel = interaction.channel
-            new_thread = await channel.create_thread(name="s Thread")
+            username = str(interaction.user.nick)
+            new_thread = await channel.create_thread(name=username+"'s Thread")
             await interaction.response.send_message(f"Created <#{new_thread.id}>")
     @client.event
     async def on_message(message):
