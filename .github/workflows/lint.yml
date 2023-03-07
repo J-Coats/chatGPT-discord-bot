@@ -1,11 +1,8 @@
 name: Lint Code
 
 on:
-  push:
-    branches:
-      - jake
-  pull_request:
-
+  - push
+  - pull_request
 
 jobs:
   lint:
