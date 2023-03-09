@@ -233,6 +233,19 @@ def run_discord_bot():
         logger.info(
             "\x1b[31mSomeone need help!\x1b[0m")
 
+    @client.tree.command(name="thread", description="Creates a thread for your use")
+    async def thread(interaction: discord.Interaction):
+        if isinstance(interaction.channel, discord.TextChannel):
+            channel: discord.TextChannel = interaction.channel
+            username = str(interaction.user.nick)
+            """
+            TODO:   - Create thread check to make sure they dont already have a thread
+            """
+            new_thread = await channel.create_thread(name=username+"'s Thread")
+            await interaction.response.send_message(f"Created <#{new_thread.id}>")
+
+            await new_thread.send(interaction.user.mention)
+
     @client.event
     async def on_message(message):
         is_reply_all = os.getenv("REPLYING_ALL")
