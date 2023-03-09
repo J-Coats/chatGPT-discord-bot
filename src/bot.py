@@ -245,6 +245,7 @@ def run_discord_bot():
             await interaction.response.send_message(f"Created <#{new_thread.id}>")
 
             await new_thread.send(interaction.user.mention)
+
     @client.event
     async def on_message(message):
         is_reply_all = os.getenv("REPLYING_ALL")
