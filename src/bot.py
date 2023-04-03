@@ -3,6 +3,8 @@ import os
 from discord import app_commands
 from src import responses
 from src import log
+import database
+import requests
 
 logger = log.setup_logger(__name__)
 
@@ -29,7 +31,13 @@ async def send_message(message, user_message):
         response = (f'> **{user_message}** - <@{str(author)}' + '> \n\n')
         chat_model = os.getenv("CHAT_MODEL")
         if chat_model == "OFFICIAL":
+            old_token = responses.official_chatbot.api_key
+            token = database.query_token(message.user.id)
+            if token:
+                logger.info(f"Using custom token for {message.user.name}")
+                responses.official_chatbot.api_key = token
             response = f"{response}{await responses.official_handle_response(user_message)}"
+            responses.official_chatbot.api_key = old_token
         elif chat_model == "UNOFFICIAL":
             response = f"{response}{await responses.unofficial_handle_response(user_message)}"
         char_limit = 1900
@@ -127,6 +135,37 @@ def run_discord_bot():
         await send_start_prompt(client)
         await client.tree.sync()
         logger.info(f'{client.user} is now running!')
+
+    @client.tree.command(name="addtoken", description="Set a user token for your requests")
+    async def addtoken(interaction: discord.Interaction, *, message: str):
+        is_dm = isinstance(interaction.channel, discord.PartialMessageable) \
+                and interaction.channel.type == discord.ChannelType.private
+        if not is_dm:
+            await interaction.response.send_message(
+                "You should only use this in a private DM so you do not leak your api token",
+                ephemeral=True,
+                delete_after=10
+            )
+            return
+        api_token = message.strip()
+        headers = {
+            "Authorization": f"Bearer {api_token}"
+        }
+        r = requests.get("https://api.openai.com/v1/models", headers=headers)
+        if r.ok:
+            logger.info(f"{interaction.user.name} has set a custom api token")
+            database.update_token(interaction.user.id, api_token)
+            await interaction.response.send_message(
+                f"Successfully set your OpenAI api key to {api_token}",
+                ephemeral=True,
+                delete_after=10
+            )
+        else:
+            await interaction.response.send_message(
+                f"You provided an invalid api key: Error: {r.reason}",
+                ephemeral=True,
+                delete_after=10
+            )
 
     @client.tree.command(name="chat", description="Have a chat with ChatGPT")
     async def chat(interaction: discord.Interaction, *, message: str):
