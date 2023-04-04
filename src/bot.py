@@ -1,9 +1,7 @@
 import discord
 import os
 from discord import app_commands
-from src import responses
-from src import log
-import database
+from src import responses, log, database
 import requests
 
 logger = log.setup_logger(__name__)
@@ -40,6 +38,7 @@ async def send_message(message, user_message):
             responses.official_chatbot.api_key = old_token
         elif chat_model == "UNOFFICIAL":
             response = f"{response}{await responses.unofficial_handle_response(user_message)}"
+        database.increment_user_prompt_counter(author)
         char_limit = 1900
         if len(response) > char_limit:
             # Split the response into smaller chunks of no more than 1900 characters each(Discord limit is 2000 per chunk)
@@ -284,6 +283,17 @@ def run_discord_bot():
             await interaction.response.send_message(f"Created <#{new_thread.id}>")
 
             await new_thread.send(interaction.user.mention)
+
+    @client.tree.command(name="stats", description="List stats for users")
+    async def stats(interaction: discord.Interaction):
+        formatted_msg = ""
+        for entry in database.query_leaderboard():
+            formatted_msg += f"<@{entry[0]}>: {entry[1]}\n"
+        await interaction.response.send_message(
+            formatted_msg,
+            ephemeral=False,
+            allowed_mentions=discord.AllowedMentions.none()
+        )
 
     @client.event
     async def on_message(message):
