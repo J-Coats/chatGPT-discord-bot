@@ -1,0 +1,25 @@
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: "deploy"
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install SSH Key
+        uses: shimataro/ssh-key-action@v2
+        with:
+            key: ${{ secrets.SSH_PRIVATE_KEY }}
+            known_hosts: ${{ secrets.SSH_KNOWN_HOSTS }}
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2.3.0
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Run deploy script
+        run: doctl compute ssh chatGPT-discord-bot --ssh-command ./deploy.sh
