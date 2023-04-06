@@ -15,6 +15,30 @@ cur.execute("""
     )
     """)
 
+cur.execute("""
+CREATE TABLE IF NOT EXISTS user_metrics(
+    snowflake INT PRIMARY KEY,
+    prompts INT
+)
+""")
+
+
+def increment_user_prompt_counter(snowflake: int):
+    r = cur.execute("SELECT prompts FROM user_metrics WHERE snowflake=?", [snowflake])
+    r = r.fetchone()
+    new_count = r[0] + 1 if r else 1
+    cur.execute("""
+    INSERT OR REPLACE INTO user_metrics(snowflake, prompts)
+    VALUES (?, ?)
+    """, [snowflake, new_count])
+    con.commit()
+
+
+def query_leaderboard():
+    r = cur.execute("SELECT * FROM user_metrics ORDER BY prompts DESC LIMIT 10")
+    r = r.fetchall()
+    return r if r else None
+
 
 def update_token(snowflake: int, token: str):
     cur.execute("""
