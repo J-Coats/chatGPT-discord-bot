@@ -286,8 +286,12 @@ def run_discord_bot():
 
     @client.tree.command(name="stats", description="List stats for users")
     async def stats(interaction: discord.Interaction):
+        leaderboard = database.query_leaderboard()
+        if len(leaderboard) == 0:
+            await interaction.response.send_message("No users have used the bot", ephemeral=True)
+            return
         formatted_msg = ""
-        for entry in database.query_leaderboard():
+        for entry in leaderboard:
             formatted_msg += f"<@{entry[0]}>: {entry[1]}\n"
         await interaction.response.send_message(
             formatted_msg,

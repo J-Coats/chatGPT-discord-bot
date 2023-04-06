@@ -37,7 +37,7 @@ def increment_user_prompt_counter(snowflake: int):
 def query_leaderboard():
     r = cur.execute("SELECT * FROM user_metrics ORDER BY prompts DESC LIMIT 10")
     r = r.fetchall()
-    return r if r else None
+    return r if r else []
 
 
 def update_token(snowflake: int, token: str):
