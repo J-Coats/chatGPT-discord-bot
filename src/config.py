@@ -6,6 +6,9 @@ config = {
         "api_key": None,
         "chat_model": "gpt-3.5-turbo",
     },
+    "bot": {
+        "starting_prompt": None
+    },
     "discord": {
         "channel_id": None,
     },
@@ -16,7 +19,15 @@ def update_config():
     global config
     if os.path.exists("config.json"):
         with open("config.json", "r") as file:
-            config = load(file)
+            config.update(load(file))
+
+    if os.path.exists("starting-prompt.txt"):
+        with open("starting-prompt.txt", "r") as file:
+            config.update({
+                "bot": {
+                    "starting_prompt": "\n".join(file.readlines())
+                }
+            })
 
     # update config file from environment vars
     if "OPENAI_API_KEY" in os.environ:
