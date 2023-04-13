@@ -1,4 +1,4 @@
-from src import bot
+from src import bot, config
 from dotenv import load_dotenv
 import sys
 
@@ -29,4 +29,5 @@ def check_version() -> None:
 
 if __name__ == '__main__':
     check_version()
+    config.update_config()
     bot.run_discord_bot()

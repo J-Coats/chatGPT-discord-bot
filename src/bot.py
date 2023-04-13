@@ -1,8 +1,8 @@
 import discord
 import os
 from discord import app_commands
-from src import responses, log, database
-import requests
+from src import responses, log, database, config
+from src.openai import verify_token
 
 logger = log.setup_logger(__name__)
 
@@ -99,6 +99,9 @@ async def send_message(message, user_message, is_reply_all):
 
 async def send_start_prompt(client):
     import os.path
+    if not config.setup_complete():
+        logger.warning("Skipped start prompt because setup was not complete")
+        return
 
     config_dir = os.path.abspath(f"{__file__}/../../")
     prompt_name = 'starting-prompt.txt'
@@ -128,6 +131,7 @@ async def send_start_prompt(client):
 
 
 def run_discord_bot():
+    responses.setup_chatbots()
     client = aclient()
 
     @client.event
@@ -148,11 +152,7 @@ def run_discord_bot():
             )
             return
         api_token = message.strip()
-        headers = {
-            "Authorization": f"Bearer {api_token}"
-        }
-        r = requests.get("https://api.openai.com/v1/models", headers=headers)
-        if r.ok:
+        if verify_token(api_token):
             logger.info(f"{interaction.user.name} has set a custom api token")
             database.update_token(interaction.user.id, api_token)
             await interaction.response.send_message(
@@ -161,14 +161,13 @@ def run_discord_bot():
                 delete_after=10
             )
         else:
-            await interaction.response.send_message(
-                f"You provided an invalid api key: Error: {r.reason}",
-                ephemeral=True,
-                delete_after=10
-            )
+            await interaction.response.send_message("You provided an invalid api key", ephemeral=True, delete_after=10)
 
     @client.tree.command(name="chat", description="Have a chat with ChatGPT")
     async def chat(interaction: discord.Interaction, *, message: str):
+        if not config.setup_complete():
+            await interaction.response.send_message("Setup is not complete", ephemeral=True)
+            return
         is_reply_all = os.getenv("REPLYING_ALL")
         if is_reply_all == "True":
             await interaction.response.defer(ephemeral=False)
@@ -280,6 +279,31 @@ def run_discord_bot():
                 "> **Info: You are now in Website ChatGPT model.**\n> You need to set your `SESSION_TOKEN` or `OPENAI_EMAIL` and `OPENAI_PASSWORD` in `env` file.")
             logger.warning("\x1b[31mSwitch to UNOFFICIAL(Website) chat model\x1b[0m")
 
+    @client.tree.command(name="config", description="Configure the bot")
+    @app_commands.choices(choice=[
+        app_commands.Choice(name="OpenAI API Token", value="open_ai.api_token"),
+        app_commands.Choice(name="OpenAI Chat Model", value="open_ai.chat_model"),
+        app_commands.Choice(name="Main Discord Channel", value="discord.channel_id"),
+    ])
+    async def config_cmd(interaction: discord.Interaction, choice: app_commands.Choice[str], message: str = None):
+        await interaction.response.defer(ephemeral=True)
+        if choice.value == "open_ai.api_token":
+            if message is not None and not verify_token(message):
+                await interaction.followup.send("Invalid API token", ephemeral=True)
+                return
+            config.config["open_ai"]["api_token"] = message
+        elif choice.value == "open_ai.chat_model":
+            # handle model
+            print(message)
+        elif choice.value == "discord.channel_id":
+            if message.isdigit() and interaction.guild.get_channel(int(message)):
+                config.config["discord"]["channel_id"] = message
+            else:
+                await interaction.followup.send(f"Invalid channel id: {message}", ephemeral=True)
+                return
+        config.save_config()
+        await interaction.followup.send("Done", ephemeral=True)
+
     @client.tree.command(name="reset", description="Complete reset ChatGPT conversation history")
     async def reset(interaction: discord.Interaction):
         chat_model = os.getenv("CHAT_MODEL")
@@ -338,6 +362,9 @@ def run_discord_bot():
         is_reply_all = os.getenv("REPLYING_ALL")
 
         if is_reply_all == "True" and message.channel.id == int(os.getenv("REPLYING_ALL_DISCORD_CHANNEL_ID")):
+            if not config.setup_complete():
+                message.channel.send("Setup is not complete")
+                return
             if message.author == client.user:
                 return
             username = str(message.author)
