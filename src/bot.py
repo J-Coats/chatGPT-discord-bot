@@ -12,6 +12,7 @@ isPrivate = False
 
 userReplyList = []
 
+
 class aclient(discord.Client):
     def __init__(self) -> None:
         intents = discord.Intents.default()
@@ -229,47 +230,28 @@ def run_discord_bot():
                 "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyAll` again.**")
             logger.warning("\x1b[31mSwitch to replyAll mode\x1b[0m")
 
-
-
     @client.tree.command(name="replyme", description="Toggle replyAll access for yourself")
     async def replyme(interaction: discord.Interaction):
-
         global userReplyList
         userReply = os.getenv("USER_REPLY_ALL")
         os.environ["REPLYING_ALL_DISCORD_CHANNEL_ID"] = str(interaction.channel_id)
         await interaction.response.defer(ephemeral=True)
-        '''
-        if userReply == "True":
-            os.environ["USER_REPLY_ALL"] = "False"
-            user = interaction.user.id
-            userReplyList.remove(user)
-            await interaction.followup.send(
-                "> **Info: The bot will only response to the slash command `/chat` next. If you want to switch back to replyAll mode, use `/replyMe` again.**")
-            logger.warning("\x1b[31mSwitch to normal mode\x1b[0m")
-        elif userReply == "False":
-            os.environ["USER_REPLY_ALL"] = "True"
-            user = interaction.user.id
-            userReplyList.append(user)
-            await interaction.followup.send(
-                "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyMe` again.**")
-            logger.warning("\x1b[31mSwitch to replyMe mode for a user.\x1b[0m")
-        '''
         user = interaction.user.id
         if userReply == "True":
-            if user not in userReplyList: #user not in list so add them
+            if user not in userReplyList:  # user not in list so add them
                 userReplyList.append(user)
                 # os.environ["USER_REPLY_ALL"] = "True"
                 await interaction.followup.send(
                     "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyMe` again.**")
                 logger.warning("\x1b[31mSwitch to replyMe mode for a user.\x1b[0m")
             else:
-                if user in userReplyList: #user already in list, so toggle them off
+                if user in userReplyList:  # user already in list, so toggle them off
                     userReplyList.remove(user)
                     await interaction.followup.send(
                         "> **Info: Ok. reply me is now disabled for you.**"
                     )
                     logger.warning("\x1b[31mSwitch to normal mode for user\x1b[0m")
-                if len(userReplyList) <= 0: #if list empty just toggle user reply all to false
+                if len(userReplyList) <= 0:  # if list empty just toggle user reply all to false
                     os.environ["USER_REPLY_ALL"] = "False"
                     await interaction.followup.send(
                         "> **Info: The bot will only response to the slash command `/chat` next. If you want to switch back to replyAll mode, use `/replyMe` again.**")
@@ -280,12 +262,6 @@ def run_discord_bot():
             await interaction.followup.send(
                 "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyMe` again.**")
             logger.warning("\x1b[31mSwitch to replyMe mode for a user.\x1b[0m")
-
-        '''
-        TODO:   
-                Make it so that the bot doesn't break when someone else toggles it
-                    - only have userreplyall toggle if no one is left in list
-        '''
 
     @client.tree.command(name="chat-model", description="Switch different chat model")
     @app_commands.choices(choices=[
@@ -367,7 +343,6 @@ def run_discord_bot():
                 channel = str(message.channel)
                 logger.info(f"\x1b[31m{username}\x1b[0m : '{user_message}' ({channel})")
                 await send_message(message, user_message, userReply)
-
 
     TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
