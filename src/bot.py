@@ -237,29 +237,8 @@ def run_discord_bot():
         global userReplyList
         userReply = os.getenv("USER_REPLY_ALL")
         os.environ["REPLYING_ALL_DISCORD_CHANNEL_ID"] = str(interaction.channel_id)
-        await interaction.response.defer(ephemeral=False)
+        await interaction.response.defer(ephemeral=True)
         '''
-        user = interaction.user.id
-        if user in userReplyList:
-            userReplyList.remove(user)
-            if len(userReplyList) <= 0:
-                os.environ["USER_REPLY_ALL"] == "False"
-                await interaction.followup.send(
-                    "> **Info: The bot will only response to the slash command `/chat` next. If you want to switch back to replyAll mode, use `/replyMe` again.**")
-                logger.warning("\x1b[31mSwitch to normal mode\x1b[0m")
-        elif user not in userReplyList:
-            userReplyList.append(user)
-            if len(userReplyList) >= 0:
-                os.environ["USER_REPLY_ALL"] == "True"
-                await interaction.followup.send(
-                    "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyMe` again.**")
-                logger.warning("\x1b[31mSwitch to replyMe mode for a user.\x1b[0m")
-        else:
-            await interaction.followup.send(
-                "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyMe` again.**")
-            logger.warning("\x1b[31mInteresting Error Occurred with /replyMe.\x1b[0m")
-        '''
-
         if userReply == "True":
             os.environ["USER_REPLY_ALL"] = "False"
             user = interaction.user.id
@@ -270,6 +249,33 @@ def run_discord_bot():
         elif userReply == "False":
             os.environ["USER_REPLY_ALL"] = "True"
             user = interaction.user.id
+            userReplyList.append(user)
+            await interaction.followup.send(
+                "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyMe` again.**")
+            logger.warning("\x1b[31mSwitch to replyMe mode for a user.\x1b[0m")
+        '''
+        user = interaction.user.id
+        if userReply == "True":
+            if user not in userReplyList: #user not in list so add them
+                userReplyList.append(user)
+                # os.environ["USER_REPLY_ALL"] = "True"
+                await interaction.followup.send(
+                    "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyMe` again.**")
+                logger.warning("\x1b[31mSwitch to replyMe mode for a user.\x1b[0m")
+            else:
+                if user in userReplyList: #user already in list, so toggle them off
+                    userReplyList.remove(user)
+                    await interaction.followup.send(
+                        "> **Info: Ok. reply me is now disabled for you.**"
+                    )
+                    logger.warning("\x1b[31mSwitch to normal mode for user\x1b[0m")
+                if len(userReplyList) <= 0: #if list empty just toggle user reply all to false
+                    os.environ["USER_REPLY_ALL"] = "False"
+                    await interaction.followup.send(
+                        "> **Info: The bot will only response to the slash command `/chat` next. If you want to switch back to replyAll mode, use `/replyMe` again.**")
+                    logger.warning("\x1b[31mSwitch to normal mode\x1b[0m")
+        elif userReply == "False":
+            os.environ["USER_REPLY_ALL"] = "True"
             userReplyList.append(user)
             await interaction.followup.send(
                 "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyMe` again.**")
