@@ -21,11 +21,9 @@ class aclient(discord.Client):
         self.activity = discord.Activity(type=discord.ActivityType.watching, name="/chat | /help")
 
 
-async def send_message(message, user_message):
-    is_reply_all = os.getenv("REPLYING_ALL")
-    userReply = os.getenv("USER_REPLY_ALL")
-    if is_reply_all == "False" and userReply == "False":
-        author = message.author.id
+async def send_message(message, user_message, is_reply_all):
+    if is_reply_all == "False":
+        author = message.user.id
         await message.response.defer(ephemeral=isPrivate)
     else:
         author = message.author.id
@@ -34,7 +32,7 @@ async def send_message(message, user_message):
         chat_model = os.getenv("CHAT_MODEL")
         if chat_model == "OFFICIAL":
             old_token = responses.official_chatbot.api_key
-            token = database.query_token(message.author.id)
+            token = database.query_token(author)
             if token:
                 logger.info(f"Using custom token for {message.user.name}")
                 responses.official_chatbot.api_key = token
@@ -51,7 +49,7 @@ async def send_message(message, user_message):
 
                 for i in range(len(parts)):
                     if i % 2 == 0:  # indices that are even are not code blocks
-                        if is_reply_all == "True" or userReply == "True":
+                        if is_reply_all == "True":
                             await message.channel.send(parts[i])
                         else:
                             await message.followup.send(parts[i])
@@ -70,11 +68,11 @@ async def send_message(message, user_message):
                             code_block_chunks = [formatted_code_block[i:i+char_limit]
                                                  for i in range(0, len(formatted_code_block), char_limit)]
                             for chunk in code_block_chunks:
-                                if is_reply_all == "True" or userReply == "True":
+                                if is_reply_all == "True":
                                     await message.channel.send(f"```{chunk}```")
                                 else:
                                     await message.followup.send(f"```{chunk}```")
-                        elif is_reply_all == "True" or userReply == "True":
+                        elif is_reply_all == "True":
                             await message.channel.send(f"```{formatted_code_block}```")
                         else:
                             await message.followup.send(f"```{formatted_code_block}```")
@@ -83,16 +81,16 @@ async def send_message(message, user_message):
                 response_chunks = [response[i:i+char_limit]
                                    for i in range(0, len(response), char_limit)]
                 for chunk in response_chunks:
-                    if is_reply_all == "True" or userReply == "True":
+                    if is_reply_all == "True":
                         await message.channel.send(chunk)
                     else:
                         await message.followup.send(chunk)
-        elif is_reply_all == "True" or userReply == "True":
+        elif is_reply_all == "True":
             await message.channel.send(response)
         else:
             await message.followup.send(response)
     except Exception as e:
-        if is_reply_all == "True" or userReply == "True":
+        if is_reply_all == "True":
             await message.channel.send("> **Error: Something went wrong, please try again later!**")
         else:
             await message.followup.send("> **Error: Something went wrong, please try again later!**")
@@ -172,8 +170,7 @@ def run_discord_bot():
     @client.tree.command(name="chat", description="Have a chat with ChatGPT")
     async def chat(interaction: discord.Interaction, *, message: str):
         is_reply_all = os.getenv("REPLYING_ALL")
-        userReply = os.getenv("USER_REPLY_ALL")
-        if is_reply_all == "True" or userReply == "True":
+        if is_reply_all == "True":
             await interaction.response.defer(ephemeral=False)
             await interaction.followup.send(
                 "> **Warn: You already on replyAll mode. If you want to use slash command, switch to normal mode, use `/replyall` again**")
@@ -186,7 +183,7 @@ def run_discord_bot():
         channel = str(interaction.channel)
         logger.info(
             f"\x1b[31m{username}\x1b[0m : '{user_message}' ({channel})")
-        await send_message(interaction, user_message)
+        await send_message(interaction, user_message, is_reply_all)
 
     @client.tree.command(name="private", description="Toggle private access")
     async def private(interaction: discord.Interaction):
@@ -233,12 +230,36 @@ def run_discord_bot():
             logger.warning("\x1b[31mSwitch to replyAll mode\x1b[0m")
 
 
+
     @client.tree.command(name="replyme", description="Toggle replyAll access for yourself")
     async def replyme(interaction: discord.Interaction):
+
         global userReplyList
         userReply = os.getenv("USER_REPLY_ALL")
         os.environ["REPLYING_ALL_DISCORD_CHANNEL_ID"] = str(interaction.channel_id)
         await interaction.response.defer(ephemeral=False)
+        '''
+        user = interaction.user.id
+        if user in userReplyList:
+            userReplyList.remove(user)
+            if len(userReplyList) <= 0:
+                os.environ["USER_REPLY_ALL"] == "False"
+                await interaction.followup.send(
+                    "> **Info: The bot will only response to the slash command `/chat` next. If you want to switch back to replyAll mode, use `/replyMe` again.**")
+                logger.warning("\x1b[31mSwitch to normal mode\x1b[0m")
+        elif user not in userReplyList:
+            userReplyList.append(user)
+            if len(userReplyList) >= 0:
+                os.environ["USER_REPLY_ALL"] == "True"
+                await interaction.followup.send(
+                    "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyMe` again.**")
+                logger.warning("\x1b[31mSwitch to replyMe mode for a user.\x1b[0m")
+        else:
+            await interaction.followup.send(
+                "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyMe` again.**")
+            logger.warning("\x1b[31mInteresting Error Occurred with /replyMe.\x1b[0m")
+        '''
+
         if userReply == "True":
             os.environ["USER_REPLY_ALL"] = "False"
             user = interaction.user.id
@@ -253,8 +274,11 @@ def run_discord_bot():
             await interaction.followup.send(
                 "> **Info: Next, the bot will response to all message in this channel only.If you want to switch back to normal mode, use `/replyMe` again.**")
             logger.warning("\x1b[31mSwitch to replyMe mode for a user.\x1b[0m")
+
         '''
-        TODO:   instead of using USER_REPLY_ALL inside .env change it to using a global flag userReply that is true if user currently sending a message is in the userReplyID list
+        TODO:   
+                Make it so that the bot doesn't break when someone else toggles it
+                    - only have userreplyall toggle if no one is left in list
         '''
 
     @client.tree.command(name="chat-model", description="Switch different chat model")
@@ -316,6 +340,7 @@ def run_discord_bot():
     @client.event
     async def on_message(message):
         is_reply_all = os.getenv("REPLYING_ALL")
+
         if is_reply_all == "True" and message.channel.id == int(os.getenv("REPLYING_ALL_DISCORD_CHANNEL_ID")):
             if message.author == client.user:
                 return
@@ -323,7 +348,7 @@ def run_discord_bot():
             user_message = str(message.content)
             channel = str(message.channel)
             logger.info(f"\x1b[31m{username}\x1b[0m : '{user_message}' ({channel})")
-            await send_message(message, user_message)
+            await send_message(message, user_message, is_reply_all)
 
         userReply = os.getenv("USER_REPLY_ALL")
         global userReplyList
@@ -335,7 +360,7 @@ def run_discord_bot():
                 user_message = str(message.content)
                 channel = str(message.channel)
                 logger.info(f"\x1b[31m{username}\x1b[0m : '{user_message}' ({channel})")
-                await send_message(message, user_message)
+                await send_message(message, user_message, userReply)
 
 
     TOKEN = os.getenv("DISCORD_BOT_TOKEN")
