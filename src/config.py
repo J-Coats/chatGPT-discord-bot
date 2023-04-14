@@ -3,7 +3,7 @@ from json import load, dumps
 
 config = {
     "open_ai": {
-        "api_key": None,
+        "api_token": None,
         "chat_model": "gpt-3.5-turbo",
     },
     "bot": {
@@ -31,7 +31,7 @@ def update_config():
 
     # update config file from environment vars
     if "OPENAI_API_KEY" in os.environ:
-        config["open_ai"]["api_key"] = os.getenv("OPENAI_API_KEY")
+        config["open_ai"]["api_token"] = os.getenv("OPENAI_API_KEY")
     if "OPENAI_ENGINE" in os.environ:
         config["open_ai"]["chat_model"] = os.getenv("OPENAI_ENGINE")
     if "DISCORD_CHANNEL_ID" in os.environ:
@@ -48,6 +48,6 @@ def save_config():
 
 def setup_complete() -> bool:
     global config
-    if config["open_ai"]["api_key"] is None:
+    if config["open_ai"]["api_token"] is None:
         return False
     return True

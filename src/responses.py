@@ -26,7 +26,7 @@ def setup_chatbots():
         })
     elif CHAT_MODEL == "OFFICIAL":
         official_chatbot = Chatbot(
-            api_key=config.config["open_ai"]["api_key"],
+            api_key=config.config["open_ai"]["api_token"],
             engine=config.config["open_ai"]["chat_model"]
         )
 
