@@ -290,6 +290,7 @@ def run_discord_bot():
                 await interaction.followup.send("Invalid API token", ephemeral=True)
                 return
             config.config["open_ai"]["api_token"] = value
+            responses.official_chatbot.api_key = value
         elif choice.value == "open_ai.chat_model":
             if value is None:
                 return await interaction.followup.send("Cannot clear the chat model setting", ephemeral=True)
