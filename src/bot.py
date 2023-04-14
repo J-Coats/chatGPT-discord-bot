@@ -1,8 +1,8 @@
 import discord
 import os
 from discord import app_commands
-from src import responses, log, database
-import requests
+from src import responses, log, database, config
+from src.openai import verify_token, verify_model
 
 logger = log.setup_logger(__name__)
 
@@ -99,35 +99,36 @@ async def send_message(message, user_message, is_reply_all):
 
 async def send_start_prompt(client):
     import os.path
+    if not config.setup_complete():
+        logger.warning("Skipped start prompt because setup was not complete")
+        return
 
-    config_dir = os.path.abspath(f"{__file__}/../../")
-    prompt_name = 'starting-prompt.txt'
-    prompt_path = os.path.join(config_dir, prompt_name)
     discord_channel_id = os.getenv("DISCORD_CHANNEL_ID")
     try:
-        if os.path.isfile(prompt_path) and os.path.getsize(prompt_path) > 0:
-            with open(prompt_path, "r", encoding="utf-8") as f:
-                prompt = f.read()
-                if (discord_channel_id):
-                    logger.info(f"Send starting prompt with size {len(prompt)}")
-                    chat_model = os.getenv("CHAT_MODEL")
-                    response = ""
-                    if chat_model == "OFFICIAL":
-                        response = f"{response}{await responses.official_handle_response(prompt)}"
-                    elif chat_model == "UNOFFICIAL":
-                        response = f"{response}{await responses.unofficial_handle_response(prompt)}"
-                    channel = client.get_channel(int(discord_channel_id))
-                    await channel.send(response)
-                    logger.info(f"Starting prompt response:{response}")
-                else:
-                    logger.info("No Channel selected. Skip sending starting prompt.")
+        if config.config["bot"]["starting_prompt"] is not None:
+            prompt = config.config["bot"]["starting_prompt"]
+            if (discord_channel_id):
+                logger.info(f"Send starting prompt with size {len(prompt)}")
+                chat_model = os.getenv("CHAT_MODEL")
+                response = ""
+                if chat_model == "OFFICIAL":
+                    response = f"{response}{await responses.official_handle_response(prompt)}"
+                elif chat_model == "UNOFFICIAL":
+                    response = f"{response}{await responses.unofficial_handle_response(prompt)}"
+                channel = client.get_channel(int(discord_channel_id))
+                await channel.send(response)
+                logger.info(f"Starting prompt response:{response}")
+            else:
+                logger.info("No Channel selected. Skip sending starting prompt.")
         else:
-            logger.info(f"No {prompt_name}. Skip sending starting prompt.")
+            logger.info("No configured prompt")
+
     except Exception as e:
         logger.exception(f"Error while sending starting prompt: {e}")
 
 
 def run_discord_bot():
+    responses.setup_chatbots()
     client = aclient()
 
     @client.event
@@ -148,11 +149,7 @@ def run_discord_bot():
             )
             return
         api_token = message.strip()
-        headers = {
-            "Authorization": f"Bearer {api_token}"
-        }
-        r = requests.get("https://api.openai.com/v1/models", headers=headers)
-        if r.ok:
+        if verify_token(api_token):
             logger.info(f"{interaction.user.name} has set a custom api token")
             database.update_token(interaction.user.id, api_token)
             await interaction.response.send_message(
@@ -161,14 +158,13 @@ def run_discord_bot():
                 delete_after=10
             )
         else:
-            await interaction.response.send_message(
-                f"You provided an invalid api key: Error: {r.reason}",
-                ephemeral=True,
-                delete_after=10
-            )
+            await interaction.response.send_message("You provided an invalid api key", ephemeral=True, delete_after=10)
 
     @client.tree.command(name="chat", description="Have a chat with ChatGPT")
     async def chat(interaction: discord.Interaction, *, message: str):
+        if not config.setup_complete():
+            await interaction.response.send_message("Setup is not complete", ephemeral=True)
+            return
         is_reply_all = os.getenv("REPLYING_ALL")
         if is_reply_all == "True":
             await interaction.response.defer(ephemeral=False)
@@ -280,6 +276,48 @@ def run_discord_bot():
                 "> **Info: You are now in Website ChatGPT model.**\n> You need to set your `SESSION_TOKEN` or `OPENAI_EMAIL` and `OPENAI_PASSWORD` in `env` file.")
             logger.warning("\x1b[31mSwitch to UNOFFICIAL(Website) chat model\x1b[0m")
 
+    @client.tree.command(name="config", description="Set or clear bot settings")
+    @app_commands.choices(choice=[
+        app_commands.Choice(name="OpenAI API Token", value="open_ai.api_token"),
+        app_commands.Choice(name="OpenAI Chat Model", value="open_ai.chat_model"),
+        app_commands.Choice(name="Main Discord Channel", value="discord.channel_id"),
+        app_commands.Choice(name="Starting Prompt", value="bot.starting_prompt")
+    ])
+    async def config_cmd(interaction: discord.Interaction, choice: app_commands.Choice[str], value: str = None):
+        await interaction.response.defer(ephemeral=True)
+        if choice.value == "open_ai.api_token":
+            if value is not None and not verify_token(value):
+                await interaction.followup.send("Invalid API token", ephemeral=True)
+                return
+            config.config["open_ai"]["api_token"] = value
+        elif choice.value == "open_ai.chat_model":
+            if value is None:
+                return await interaction.followup.send("Cannot clear the chat model setting", ephemeral=True)
+            elif not config.setup_complete():
+                return await interaction.followup.send(
+                    "Must set an OpenAI API token before changing the model",
+                    ephemeral=True
+                )
+            elif not verify_model(value):
+                return await interaction.followup.send(f"Invalid model: {value}", ephemeral=True)
+            else:
+                config.config["open_ai"]["chat_model"] = value
+        elif choice.value == "bot.starting_prompt":
+            config.config["bot"]["starting_prompt"] = value
+            if value is None:
+                return await interaction.followup.send("Cleared the starting prompt", ephemeral=True)
+        elif choice.value == "discord.channel_id":
+            if value.isdigit() and interaction.guild.get_channel(int(value)):
+                config.config["discord"]["channel_id"] = value
+            else:
+                return await interaction.followup.send(f"Invalid channel id: {value}", ephemeral=True)
+        config.save_config()
+        if value is None:
+            response = f"Reset {choice.name}"
+        else:
+            response = f"Set {choice.name} to {value}"
+        await interaction.followup.send(response, ephemeral=True)
+
     @client.tree.command(name="reset", description="Complete reset ChatGPT conversation history")
     async def reset(interaction: discord.Interaction):
         chat_model = os.getenv("CHAT_MODEL")
@@ -338,6 +376,9 @@ def run_discord_bot():
         is_reply_all = os.getenv("REPLYING_ALL")
 
         if is_reply_all == "True" and message.channel.id == int(os.getenv("REPLYING_ALL_DISCORD_CHANNEL_ID")):
+            if not config.setup_complete():
+                message.channel.send("Setup is not complete")
+                return
             if message.author == client.user:
                 return
             username = str(message.author)
