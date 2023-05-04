@@ -3,6 +3,8 @@ import os
 from discord import app_commands
 from src import responses, log, database, config
 from src.openai import verify_token, verify_model
+import requests
+import time
 
 logger = log.setup_logger(__name__)
 
@@ -399,6 +401,60 @@ def run_discord_bot():
                 channel = str(message.channel)
                 logger.info(f"\x1b[31m{username}\x1b[0m : '{user_message}' ({channel})")
                 await send_message(message, user_message, userReply)
+
+        
+    @client.tree.command(name="weather", description="Given a city as an argument, grabs weather via api request.")
+    async def weather(interaction: discord.Interaction, *, message: str):
+        if interaction.user == client.user:
+            return
+        username = str(interaction.user)
+        city = message
+
+        is_reply_all = os.getenv("REPLYING_ALL")
+        if is_reply_all == "True":
+            await interaction.response.defer(ephemeral=False)
+            await interaction.followup.send(
+                "> **Warn: You already on replyAll mode. If you want to use slash command, switch to normal mode, use `/replyall` again**")
+            logger.warning("\x1b[31mYou already on replyAll mode, can't use slash command!\x1b[0m")
+            return
+
+
+        channel = str(interaction.channel)
+        logger.info(
+            f"\x1b[31m{username}\x1b[0m : '{city}' ({channel})")
+        
+        api_endpoint = "http://api.openweathermap.org/data/2.5/weather"
+        api_key = os.getenv('OPENWEATHERMAP_API_KEY')  # Replace with your own API key
+
+        # Make a GET request to the API endpoint with the parameters
+        response = requests.get(api_endpoint, params={
+            "q": city,
+            "appid": api_key,
+            "units": "imperial"
+        })
+
+        # Check if the response was successful
+        if response.status_code == 200:
+            # Parse the JSON response to extract the relevant weather data
+            json_response = response.json()
+            temperature = json_response["main"]["temp"]
+            description = json_response["weather"][0]["description"]
+            timezone = json_response['timezone']
+            hour_diff_timezone = timezone / 3600
+
+        t = time.localtime()
+        hour = t.tm_hour
+        min = t.tm_min
+        sec = t.tm_sec
+        overall_time = str(hour) + ":" + str(min) + ":" + str(sec)
+
+        #print(json_response)
+
+        message_to_be_sent = f"Considering the time at UTC 0 is {overall_time}, and we're in the UTC {hour_diff_timezone} timezone and based on the fact that it's {temperature} Fahrenheight and {description} outside,\
+        how would you describe the weather in {city}? Tell me the current time and suggest activities appropriate for that time based on the weather"
+
+        await send_message(interaction, message_to_be_sent, is_reply_all)
+
 
     TOKEN = os.getenv("DISCORD_BOT_TOKEN")
 
