@@ -441,6 +441,9 @@ def run_discord_bot():
             description = json_response["weather"][0]["description"]
             timezone = json_response['timezone']
             hour_diff_timezone = timezone / 3600
+        else:
+            await interaction.response.send_message(f"Error getting weather info: {response.reason}", ephemeral=True)
+            return
 
         t = time.localtime()
         hour = t.tm_hour
